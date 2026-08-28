@@ -1,0 +1,426 @@
+-- ============================================================
+-- SCRIPT DE BASE DE DATOS POSTGRESQL COMPLETO
+-- Base de datos final con 4 incrementos + Usuarios Administradores
+-- ============================================================
+
+-- Crear extensión para encriptación de contraseñas
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ============================================================
+-- INCREMENTO 1 (Amarillo)
+-- ============================================================
+
+-- Tabla: cargo
+CREATE TABLE cargo (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla: rol
+CREATE TABLE rol (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla: contacto
+CREATE TABLE contacto (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100),
+    apellido VARCHAR(100),
+    cargo VARCHAR(100),
+    email VARCHAR(150) CONSTRAINT check_email_contacto CHECK (
+        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|cl)$'
+    ),
+    telefono VARCHAR(20),
+    principal BOOLEAN DEFAULT FALSE
+);
+
+-- Tabla: proveedor
+CREATE TABLE proveedor (
+    id SERIAL PRIMARY KEY,
+    rut VARCHAR(12) UNIQUE,
+    nombre VARCHAR(200) NOT NULL UNIQUE,
+    direccion VARCHAR(255),
+    telefono VARCHAR(20),
+    web VARCHAR(255),
+    email VARCHAR(150) CONSTRAINT check_email_proveedor CHECK (
+        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|cl)$'
+    ),
+    descripcion TEXT
+);
+
+-- Tabla: tipo_cliente
+CREATE TABLE tipo_cliente (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla: cliente
+CREATE TABLE cliente (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100),
+    rut VARCHAR(12) NOT NULL UNIQUE CONSTRAINT check_rut_format CHECK (
+        rut ~* '^[0-9]{1,2}\.[0-9]{3}\.[0-9]{3}-[0-9Kk]$'
+    ),
+    razon_social VARCHAR(200),
+    apellidos VARCHAR(100),
+    email VARCHAR(150) CONSTRAINT check_email_cliente CHECK (
+        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|cl)$'
+    ),
+    comuna VARCHAR(100),
+    direccion VARCHAR(255),
+    ciudad VARCHAR(100),
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_registro DATE DEFAULT CURRENT_DATE,
+    tipo_cliente_id INTEGER,
+    CONSTRAINT fk_cliente_tipo FOREIGN KEY (tipo_cliente_id) 
+        REFERENCES tipo_cliente(id) ON DELETE SET NULL
+);
+
+-- Tabla: contacto_empresa (relación muchos a muchos)
+CREATE TABLE contacto_empresa (
+    id SERIAL PRIMARY KEY,
+    id_contacto INTEGER NOT NULL,
+    id_empresa INTEGER NOT NULL,
+    CONSTRAINT fk_contacto FOREIGN KEY (id_contacto) 
+        REFERENCES contacto(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cliente FOREIGN KEY (id_empresa) 
+        REFERENCES cliente(id) ON DELETE CASCADE,
+    CONSTRAINT unique_contacto_empresa UNIQUE (id_contacto, id_empresa)
+);
+
+-- Tabla: tipo_producto
+CREATE TABLE tipo_producto (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- Tabla: producto
+CREATE TABLE producto (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    imagen BYTEA,
+    codigo_ska VARCHAR(50),
+    unidades INTEGER DEFAULT 0,
+    descripcion TEXT,
+    tipo_producto_id INTEGER,
+    CONSTRAINT fk_producto_tipo FOREIGN KEY (tipo_producto_id) 
+        REFERENCES tipo_producto(id) ON DELETE SET NULL
+);
+
+-- Tabla: materiales_producto
+CREATE TABLE materiales_producto (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(200),
+    unidades INTEGER DEFAULT 0,
+    descripcion TEXT,
+    proveedor_id INTEGER,
+    tipo_producto_id INTEGER,
+    CONSTRAINT fk_material_proveedor FOREIGN KEY (proveedor_id) 
+        REFERENCES proveedor(id) ON DELETE SET NULL,
+    CONSTRAINT fk_material_tipo FOREIGN KEY (tipo_producto_id) 
+        REFERENCES tipo_producto(id) ON DELETE SET NULL
+);
+
+-- Tabla: usuario
+CREATE TABLE usuario (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100),
+    apellidos VARCHAR(100),
+    email VARCHAR(150) UNIQUE NOT NULL CONSTRAINT check_email_usuario CHECK (
+        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|cl)$'
+    ),
+    rut VARCHAR(12) UNIQUE CONSTRAINT check_rut_usuario CHECK (
+        rut ~* '^[0-9]{1,2}\.[0-9]{3}\.[0-9]{3}-[0-9Kk]$'
+    ),
+    telefono VARCHAR(20),
+    direccion VARCHAR(255),
+    cargo_id INTEGER,
+    rol_id INTEGER,
+    CONSTRAINT fk_usuario_cargo FOREIGN KEY (cargo_id) 
+        REFERENCES cargo(id) ON DELETE SET NULL,
+    CONSTRAINT fk_usuario_rol FOREIGN KEY (rol_id) 
+        REFERENCES rol(id) ON DELETE SET NULL
+);
+
+-- Tabla: contraseña (con encriptación)
+CREATE TABLE contrasena (
+    id SERIAL PRIMARY KEY,
+    contrasena_temporal VARCHAR(255),
+    contrasena VARCHAR(255) NOT NULL,
+    fecha_ultima_contrasena TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_id INTEGER NOT NULL,
+    CONSTRAINT fk_contrasena_usuario FOREIGN KEY (usuario_id) 
+        REFERENCES usuario(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- INCREMENTO 2 (Naranja)
+-- ============================================================
+
+-- Tabla: tipo_venta
+CREATE TABLE tipo_venta (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+-- ============================================================
+-- INCREMENTO 3 (Azul)
+-- ============================================================
+
+-- Tabla: venta
+CREATE TABLE venta (
+    id SERIAL PRIMARY KEY,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    n_documento VARCHAR(50) NOT NULL UNIQUE,
+    cliente INTEGER NOT NULL,
+    estado_venta VARCHAR(50),
+    tipo_pago VARCHAR(50),
+    observacion TEXT,
+    canal_venta VARCHAR(50),
+    estado_dte VARCHAR(50),
+    tipo_dte VARCHAR(50),
+    usuario_vendedor INTEGER,
+    CONSTRAINT fk_venta_cliente FOREIGN KEY (cliente) 
+        REFERENCES cliente(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_venta_usuario FOREIGN KEY (usuario_vendedor) 
+        REFERENCES usuario(id) ON DELETE SET NULL
+);
+
+-- Tabla: detalle_venta
+CREATE TABLE detalle_venta (
+    id SERIAL PRIMARY KEY,
+    cantidad_producto INTEGER NOT NULL,
+    id_producto INTEGER NOT NULL,
+    CONSTRAINT fk_detalle_producto FOREIGN KEY (id_producto) 
+        REFERENCES producto(id) ON DELETE RESTRICT
+);
+
+-- Tabla: pago_venta
+CREATE TABLE pago_venta (
+    id SERIAL PRIMARY KEY,
+    fecha_pago TIMESTAMP NOT NULL,
+    monto DECIMAL(12,2) NOT NULL,
+    tipo_pago VARCHAR(50) NOT NULL,
+    referencia VARCHAR(100),
+    observacion TEXT,
+    venta_id INTEGER NOT NULL,
+    CONSTRAINT fk_pago_venta FOREIGN KEY (venta_id) 
+        REFERENCES venta(id) ON DELETE CASCADE
+);
+
+-- Tabla: historial_precio_producto
+CREATE TABLE historial_precio_producto (
+    id SERIAL PRIMARY KEY,
+    precio_bruto DECIMAL(12,2) NOT NULL,
+    precio_neto DECIMAL(12,2) NOT NULL,
+    descuento DECIMAL(5,2) DEFAULT 0,
+    fecha_precio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    producto INTEGER NOT NULL,
+    usuario_id INTEGER,
+    CONSTRAINT fk_historial_producto FOREIGN KEY (producto) 
+        REFERENCES producto(id) ON DELETE CASCADE,
+    CONSTRAINT fk_historial_usuario FOREIGN KEY (usuario_id) 
+        REFERENCES usuario(id) ON DELETE SET NULL
+);
+
+-- Tabla: inicio_sesion_usuario
+CREATE TABLE inicio_sesion_usuario (
+    id SERIAL PRIMARY KEY,
+    fecha_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_cierre TIMESTAMP,
+    usuario INTEGER NOT NULL,
+    CONSTRAINT fk_sesion_usuario FOREIGN KEY (usuario) 
+        REFERENCES usuario(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- INCREMENTO 4 (Morado) - No hay tablas adicionales visibles
+-- ============================================================
+
+-- ============================================================
+-- ÍNDICES PARA MEJORAR RENDIMIENTO
+-- ============================================================
+
+-- Índices para búsquedas frecuentes
+CREATE INDEX idx_cliente_rut ON cliente(rut);
+CREATE INDEX idx_cliente_activo ON cliente(activo);
+CREATE INDEX idx_venta_fecha ON venta(fecha);
+CREATE INDEX idx_venta_cliente ON venta(cliente);
+CREATE INDEX idx_venta_n_documento ON venta(n_documento);
+CREATE INDEX idx_producto_codigo ON producto(codigo_ska);
+CREATE INDEX idx_usuario_email ON usuario(email);
+CREATE INDEX idx_pago_venta_id ON pago_venta(venta_id);
+
+-- ============================================================
+-- FUNCIONES ÚTILES
+-- ============================================================
+
+-- Función para encriptar contraseñas antes de insertar
+CREATE OR REPLACE FUNCTION encriptar_contrasena()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.contrasena IS NOT NULL THEN
+        NEW.contrasena := crypt(NEW.contrasena, gen_salt('bf', 8));
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para encriptar automáticamente
+CREATE TRIGGER trigger_encriptar_contrasena
+    BEFORE INSERT OR UPDATE ON contrasena
+    FOR EACH ROW
+    EXECUTE FUNCTION encriptar_contrasena();
+
+-- Función para validar contraseña
+CREATE OR REPLACE FUNCTION validar_contrasena(usuario_id_param INTEGER, contrasena_param VARCHAR)
+RETURNS BOOLEAN AS $$
+DECLARE
+    contrasena_hash VARCHAR;
+BEGIN
+    SELECT contrasena INTO contrasena_hash 
+    FROM contrasena 
+    WHERE usuario_id = usuario_id_param 
+    ORDER BY fecha_ultima_contrasena DESC 
+    LIMIT 1;
+    
+    RETURN (contrasena_hash = crypt(contrasena_param, contrasena_hash));
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- COMENTARIOS EN LAS TABLAS
+-- ============================================================
+
+COMMENT ON TABLE cliente IS 'Tabla de clientes con RUT único en formato chileno';
+COMMENT ON TABLE proveedor IS 'Tabla de proveedores, nombre es único y obligatorio';
+COMMENT ON TABLE producto IS 'Tabla de productos con imagen almacenada en BYTEA';
+COMMENT ON TABLE venta IS 'Tabla de ventas con número de documento único';
+COMMENT ON TABLE contrasena IS 'Contraseñas encriptadas con bcrypt automáticamente';
+COMMENT ON TABLE pago_venta IS 'Pagos de ventas, referencia y observación opcionales';
+
+-- ============================================================
+-- DATOS INICIALES
+-- ============================================================
+
+-- Insertar roles básicos
+INSERT INTO rol (nombre, descripcion) VALUES 
+    ('Administrador', 'Acceso total al sistema'),
+    ('Vendedor', 'Gestión de ventas'),
+    ('Bodeguero', 'Gestión de inventario');
+
+-- Insertar cargos básicos
+INSERT INTO cargo (nombre, descripcion) VALUES 
+    ('Gerente General', 'Máxima autoridad'),
+    ('Jefe de Ventas', 'Supervisa equipo de ventas'),
+    ('Vendedor', 'Ejecutivo de ventas');
+
+-- Insertar tipos de cliente
+INSERT INTO tipo_cliente (nombre, descripcion) VALUES 
+    ('Minorista', 'Cliente que compra al por menor'),
+    ('Mayorista', 'Cliente que compra al por mayor'),
+    ('Distribuidor', 'Distribuidor autorizado');
+
+-- ============================================================
+-- USUARIOS ADMINISTRADORES INICIALES
+-- ============================================================
+
+-- Insertar usuario: Administrador
+INSERT INTO usuario (nombre, apellidos, email, rut, telefono, direccion, cargo_id, rol_id)
+VALUES (
+    'Administrador',
+    'Sistema',
+    'administrador@aeve.cl',
+    NULL,
+    NULL,
+    NULL,
+    (SELECT id FROM cargo WHERE nombre = 'Gerente General' LIMIT 1),
+    (SELECT id FROM rol WHERE nombre = 'Administrador' LIMIT 1)
+);
+
+-- Insertar contraseña para Administrador (contraseña: admin123)
+INSERT INTO contrasena (contrasena, usuario_id)
+VALUES (
+    'admin123',
+    (SELECT id FROM usuario WHERE email = 'administrador@aeve.cl')
+);
+
+-- Insertar usuario: Karelyz Rolas
+INSERT INTO usuario (nombre, apellidos, email, rut, telefono, direccion, cargo_id, rol_id)
+VALUES (
+    'Karelyz',
+    'Rolas',
+    'krolas@aeve.cl',
+    NULL,
+    NULL,
+    NULL,
+    (SELECT id FROM cargo WHERE nombre = 'Gerente General' LIMIT 1),
+    (SELECT id FROM rol WHERE nombre = 'Administrador' LIMIT 1)
+);
+
+-- Insertar contraseña para Karelyz Rolas (contraseña: krolas123)
+INSERT INTO contrasena (contrasena, usuario_id)
+VALUES (
+    'krolas123',
+    (SELECT id FROM usuario WHERE email = 'krolas@aeve.cl')
+);
+
+-- ============================================================
+-- VERIFICACIÓN DE USUARIOS CREADOS
+-- ============================================================
+
+-- Consulta para verificar que los usuarios fueron creados correctamente
+SELECT 
+    u.id,
+    u.nombre,
+    u.apellidos,
+    u.email,
+    c.nombre as cargo,
+    r.nombre as rol,
+    'Contraseña encriptada correctamente' as estado_contrasena
+FROM usuario u
+LEFT JOIN cargo c ON u.cargo_id = c.id
+LEFT JOIN rol r ON u.rol_id = r.id
+WHERE u.email IN ('administrador@aeve.cl', 'krolas@aeve.cl');
+
+-- ============================================================
+-- INSTRUCCIONES DE USO
+-- ============================================================
+
+/*
+USUARIOS CREADOS:
+-----------------
+1. Usuario: administrador@aeve.cl
+   Contraseña: admin123
+   Rol: Administrador
+
+2. Usuario: krolas@aeve.cl
+   Contraseña: krolas123
+   Rol: Administrador
+
+NOTAS IMPORTANTES:
+------------------
+- Las contraseñas se encriptan automáticamente con bcrypt
+- Para validar login usa: SELECT validar_contrasena(usuario_id, 'contraseña');
+- Cambia las contraseñas por defecto en producción
+- Los RUT están en NULL, puedes actualizarlos posteriormente
+
+EJEMPLO DE VALIDACIÓN DE CONTRASEÑA:
+------------------------------------
+SELECT validar_contrasena(
+    (SELECT id FROM usuario WHERE email = 'krolas@aeve.cl'),
+    'krolas123'
+) AS login_exitoso;
+
+EJEMPLO DE ACTUALIZAR RUT:
+--------------------------
+UPDATE usuario 
+SET rut = '11.111.111-1' 
+WHERE email = 'krolas@aeve.cl';
+*/
